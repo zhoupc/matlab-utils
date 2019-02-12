@@ -10,6 +10,7 @@ All functions in this repo are used by multiple packages developed by me, but th
 2. [minBoundingBox](https://ww2.mathworks.cn/matlabcentral/fileexchange/31126-2d-minimal-bounding-box?s_tid=FX_rc1_behav):  Compute quickly the minimal bounding box of a set of 2D points. by [Julien Diener](https://ww2.mathworks.cn/matlabcentral/profile/authors/1978578-julien-diener)
 3. [genpath_exlude.m](https://www.mathworks.com/matlabcentral/fileexchange/22209-genpath_exclude):  Executes like genpath, but can ignore specified directories. by [Jesse Hopkins](https://www.mathworks.com/matlabcentral/profile/authors/697331-jesse-hopkins)
 4. [export_fig](https://github.com/altmany/export_fig): A toolbox for exporting figures from MATLAB to standard image and document formats nicely. by [Yair Altman](https://github.com/altmany)
+5. [Polygon2Voxel](https://www.mathworks.com/matlabcentral/fileexchange/24086-polygon2voxel):  Convert a triangulated mesh into a voxel volume. by [Dirk-Jan Kroon](https://www.mathworks.com/matlabcentral/profile/authors/1097878-dirk-jan-kroon)
 
-## Copyright
+## copyright
 [Pengcheng Zhou](zhoupc.github.io) @ Columbia University, 2019
