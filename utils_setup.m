@@ -1,3 +1,3 @@
 util_folder = fileparts(mfilename('fullpath')); 
 
-addpath(genpath(util_folder)); 
+addpath(genpath_exclude(util_folder, '.git')); 
