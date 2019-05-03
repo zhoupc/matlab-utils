@@ -33,96 +33,127 @@ function [subs_2p, V] = mesh2volume(vertices, faces, options)
 %}
 
 %% parameters
-voxel_em = options.voxel_em;    %em resolution
-dims_2p = options.dims_2p;
-range_2p = options.range_2p;
-voxels_2p = range_2p./dims_2p;    %2p resolution
-res_factor = 3;     % use a higher resolution before downsampling
-A = options.A;
+voxel_em = reshape(options.voxel_em, 1,[]);    % em resolution during the voxelization
+dims_2p = options.dims_2p;      % dimension of the 2p space
+range_2p = options.range_2p;    % spatial range of the 2p space
+voxels_2p = reshape(range_2p./dims_2p, 1, []);    %2p resolution
+res_factor = 3;         % use a higher resolution before doing downsampling
+A = options.A;          % transformation matrix between EM space and 2p space . y_2p = A*y_em + offset;
 offset = options.offset;
-scale_factor = options.scale_factor;
-if isfield(options, 'use_parallel')
+scale_factor = options.scale_factor;  % scaling the EM coordinates.
+if isfield(options, 'use_parallel')     % do parallel processing or not
     use_parallel = options.use_parallel;
 else
     use_parallel = true;
 end
-if isempty(faces)
+if isempty(faces)       % empty input. return.
     subs_2p = zeros(0, 3);
     V = 0;
     return;
 end
 
 %% voxelize mesh surfaces
-if iscell(vertices)
-    nz_voxels = cell(1, length(vertices));
+if iscell(vertices)   % vertices is saved as multiple small fragments.
+    nz_voxels = cell(length(vertices), 1);
     if use_parallel
         parfor seg_id = 1:length(vertices)
             % convert the coordinates from EM space to 2p space
             tmp_vert = bsxfun(@plus, vertices{seg_id} * scale_factor * A, offset);
             
-            % the starting point
-            vert_0 = min(tmp_vert);
-            vert_range = max(tmp_vert)-vert_0+1;
+            % voxelize these coordinates at the resolution of voxel_em
+            tmp_vert = bsxfun(@times, tmp_vert, reshape(1./voxel_em, 1, []));
             
-            % voxelize
-            FV = struct('vertices', bsxfun(@minus, tmp_vert, vert_0), ...
-                'faces', faces{seg_id} + 1);
-            tmp_V = polygon2voxel(FV, round(vert_range./voxel_em), 'auto', false);
+            % translate the volume and determine the volume range
+            vert_0 = min(tmp_vert);
+            tmp_vert = bsxfun(@minus, tmp_vert, vert_0);
+            vert_range = ceil(max(tmp_vert))+1;
+            
+            % voxelize the mesh
+            FV = struct('vertices', tmp_vert, 'faces', faces{seg_id} + 1);
+            tmp_V = polygon2voxel(FV, vert_range, 'none', false);
             
             %% determine the xyz locations of nonzero voxels
             ind = find(tmp_V);
-            [x, y, z] = ind2sub(size(tmp_V), ind);
-            temp = bsxfun(@times, [x, y, z]-1, voxel_em);
-            nz_voxels{seg_id} = bsxfun(@plus, temp', vert_0');
+            if isempty(ind)  % the segment is too small.
+                nz_voxels{seg_id} = single([]);
+            else
+                [x, y, z] = ind2sub(size(tmp_V), ind);
+                
+                % upsample the results
+                temp = bsxfun(@plus, [x, y, z]-1, vert_0);
+                nz_voxels{seg_id} = round(bsxfun(@times, temp, (voxel_em./voxels_2p)*res_factor)) + 1;
+            end
         end
     else
         for seg_id = 1:length(vertices)
             % convert the coordinates from EM space to 2p space
             tmp_vert = bsxfun(@plus, vertices{seg_id} * scale_factor * A, offset);
             
-            % the starting point
-            vert_0 = min(tmp_vert);
-            vert_range = max(tmp_vert)-vert_0+1;
+            % voxelize these coordinates at the resolution of voxel_em
+            tmp_vert = bsxfun(@times, tmp_vert, reshape(1./voxel_em, 1, []));
             
-            % voxelize
-            FV = struct('vertices', bsxfun(@minus, tmp_vert, vert_0), ...
-                'faces', faces{seg_id} + 1);
-            tmp_V = polygon2voxel(FV, round(vert_range./voxel_em), 'auto', false);
+            % translate the volume and determine the volume range
+            vert_0 = min(tmp_vert);
+            tmp_vert = bsxfun(@minus, tmp_vert, vert_0);
+            vert_range = ceil(max(tmp_vert))+1;
+            
+            % voxelize the mesh
+            FV = struct('vertices', tmp_vert, 'faces', faces{seg_id} + 1);
+            tmp_V = polygon2voxel(FV, vert_range, 'none', false);
             
             %% determine the xyz locations of nonzero voxels
             ind = find(tmp_V);
-            [x, y, z] = ind2sub(size(tmp_V), ind);
-            temp = bsxfun(@times, [x, y, z]-1, voxel_em);
-            nz_voxels{seg_id} = bsxfun(@plus, temp', vert_0');
+            if isempty(ind)  % the segment is too small.
+                nz_voxels{seg_id} = single([]);
+            else
+                [x, y, z] = ind2sub(size(tmp_V), ind);
+                
+                % upsample the results
+                temp = bsxfun(@plus, [x, y, z]-1, vert_0);
+                nz_voxels{seg_id} = round(bsxfun(@times, temp, (voxel_em./voxels_2p)*res_factor)) + 1;
+            end
         end
     end
     % xyz positions of all nonzero voxels
-    subs = round(bsxfun(@times, cell2mat(nz_voxels), res_factor./voxels_2p')') + 1;
+    subs = cell2mat(nz_voxels);
+    
+    if isempty(subs)
+        subs_2p = zeros(0, 3);
+        V = [];
+        return;
+    end
 else
     % convert the coordinates from EM space to 2p space
     tmp_vert = bsxfun(@plus, vertices * scale_factor * A, offset);
     
-    % the starting point
-    vert_0 = min(tmp_vert);
-    vert_range = max(tmp_vert)-vert_0+1;
+    % voxelize these coordinates at the resolution of voxel_em
+    tmp_vert = bsxfun(@times, tmp_vert, reshape(1./voxel_em, 1, []));
     
-    % voxelize
-    FV = struct('vertices', bsxfun(@minus, tmp_vert, vert_0), ...
-        'faces', faces + 1);
-    tmp_V = polygon2voxel(FV, round(vert_range./voxel_em), 'auto', false);
+    % translate the volume and determine the volume range
+    vert_0 = min(tmp_vert);
+    tmp_vert = bsxfun(@minus, tmp_vert, vert_0);
+    vert_range = ceil(max(tmp_vert))+1;
+    
+    % voxelize the mesh
+    FV = struct('vertices', tmp_vert, 'faces', faces + 1);
+    tmp_V = polygon2voxel(FV, vert_range, 'none', false);
     
     %% determine the xyz locations of nonzero voxels
     ind = find(tmp_V);
+    if isempty(ind)  % the segment is too small.
+        subs_2p = zeros(0, 3);
+        V = [];
+        return;
+    end
     [x, y, z] = ind2sub(size(tmp_V), ind);
-    temp = bsxfun(@times, [x, y, z]-1, voxel_em);
-    % xyz positions of all nonzero voxels
-    subs = round(bsxfun(@times, bsxfun(@plus, temp', vert_0'), ...
-        res_factor./voxels_2p')') + 1;
+    
+    % upsample the results
+    temp = bsxfun(@plus, [x, y, z]-1, vert_0);
+    subs = round(bsxfun(@times, temp, (voxel_em./voxels_2p)*res_factor)) + 1;
 end
-
 %% create a small volume for filling the empty holes
 
-volume_size = range(subs)+1;
+volume_size = range(subs, 1)+1;
 subs_0 = min(subs, [],1);
 idx_new = bsxfun(@minus, subs, subs_0)+1;
 
